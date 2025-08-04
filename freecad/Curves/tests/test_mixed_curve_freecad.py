@@ -93,9 +93,9 @@ class TestMixedCurveWithFreeCAD(BaseTestCase):
         self.assertEqual(len(sketches), 2)
 
         curve = mixed_curve.MixedCurveCmd().makeCPCFeature(
-            sketches[0], sketches[1], 
-            self.get_sketch_plane_normal(sketches[0]),
-            self.get_sketch_plane_normal(sketches[1])
+            sketches[0], sketches[1],
+            mixed_curve.MixedCurveFP.get_direction(sketches[0]),
+            mixed_curve.MixedCurveFP.get_direction(sketches[1])
         )
         # check, that new wire is ok and will be rendered without errors
         self.assertGreater(len(curve.Shape.Wires), 0)
