@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+# SPDX-License-Identifier: LGPL-2.1-or-later
 
 __title__ = 'MapOnFace'
 __author__ = 'Christophe Grellier (Chris_G)'
@@ -111,11 +111,14 @@ class MapOnFaceFP(MofProxyBase):
                 comp.add(faces)
                 comp.add(wires)
             obj.Shape = comp
+            _ = [print(mes) for mes in sm.Messages]
             return
         if not obj.FillFaces:
             obj.Shape = sm.get_extrusion(obj.Offset, obj.Offset + obj.Thickness)
+            _ = [print(mes) for mes in sm.Messages]
             return
         obj.Shape = sm.get_solids(obj.Offset, obj.Offset + obj.Thickness)
+        _ = [print(mes) for mes in sm.Messages]
 
     def onChanged(self, obj, prop):
         if 'Restore' in obj.State:

@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+# SPDX-License-Identifier: LGPL-2.1-or-later
 
 __title__ = "Blend curve"
 __author__ = "Christophe Grellier (Chris_G)"
@@ -44,8 +44,8 @@ class BlendCurveFP:
         obj.addProperty("App::PropertyVectorList", "CurvePts", "BlendCurve", "Poles of the Bezier curve")
         obj.addProperty("App::PropertyEnumeration", "Output", "BlendCurve", "Output type").Output = ["Wire", "Joined", "Single"]
         obj.addProperty("App::PropertyBool", "AutoScale", "BlendCurve", "Compute scales to get minimal curvature along curve").AutoScale = False
-        obj.Scale1 = (1., -5.0, 5.0, 0.05)
-        obj.Scale2 = (1., -5.0, 5.0, 0.05)
+        obj.Scale1 = (1., -100.0, 100.0, 0.05)
+        obj.Scale2 = (1., -100.0, 100.0, 0.05)
         obj.setEditorMode("CurvePts", 2)
         obj.Proxy = self
 
@@ -63,7 +63,8 @@ class BlendCurveFP:
             for sen in senl:
                 if ("Edge" in sen) or ("Line" in sen):
                     sh = obj.Shape.copy()
-                    sh.Placement = obj.getGlobalPlacement()
+                    if hasattr(obj, "getGlobalPlacement"):
+                        sh.Placement = obj.getGlobalPlacement()
                     if hasattr(sh, "getElementName"):
                         sub = sh.getElement(sh.getElementName(sen))
                     else:

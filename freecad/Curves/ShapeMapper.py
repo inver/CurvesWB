@@ -1,8 +1,13 @@
+# SPDX-License-Identifier: LGPL-2.1-or-later
+
 import FreeCAD
 import FreeCADGui
 import Part
 import functools
 import time
+
+
+mes = FreeCAD.Console.PrintMessage
 
 
 def timer(func):
@@ -12,12 +17,11 @@ def timer(func):
         value = func(*args, **kwargs)
         toc = time.perf_counter()
         elapsed_time = toc - tic
-        print(f"{func.__name__} took {elapsed_time:0.4f} seconds")
+        mes(f"{func.__name__} took {elapsed_time:0.4f} seconds")
         return value
     return wrapper_timer
 
 
-# Old class - Not used
 class BoundarySorter:
     """
     Sort a wire list to build faces
@@ -28,7 +32,7 @@ class BoundarySorter:
     """
 
     def __init__(self, wires):
-        self.wires = []
+        self.closed_wires = []
         self.parents = []
         self.sorted_wires = []
         self.open_wires = []
@@ -37,14 +41,14 @@ class BoundarySorter:
             if not w.isClosed():
                 self.open_wires.append(w)
             else:
-                self.wires.append(w)
+                self.closed_wires.append(w)
                 self.parents.append([])
                 self.sorted_wires.append([])
         self.done = False
 
     def check_inside(self):
-        for i, w1 in enumerate(self.wires):
-            for j, w2 in enumerate(self.wires):
+        for i, w1 in enumerate(self.closed_wires):
+            for j, w2 in enumerate(self.closed_wires):
                 if not i == j:
                     if w2.BoundBox.isInside(w1.BoundBox):
                         # if self.fine_check_inside(w1, w2):
@@ -55,12 +59,12 @@ class BoundarySorter:
         for i, p in enumerate(self.parents):
             if (p is not None) and p == []:
                 to_remove.append(i)
-                self.sorted_wires[i].append(self.wires[i])
+                self.sorted_wires[i].append(self.closed_wires[i])
                 self.parents[i] = None
         for i, p in enumerate(self.parents):
             if (p is not None) and len(p) == 1:
                 to_remove.append(i)
-                self.sorted_wires[p[0]].append(self.wires[i])
+                self.sorted_wires[p[0]].append(self.closed_wires[i])
                 self.parents[i] = None
         # print("Removing full : {}".format(to_remove))
         if len(to_remove) > 0:
@@ -456,6 +460,19 @@ class ShapeMapper:
         self._flat_wires = None
         self._sorted_wires = None
         self.Tolerance = 1e-7
+        self.Messages = ["", ]
+        _ = self.FlatWires
+        # _ = self.SortedWires
+
+    def timer(func):
+        def wrapper_timer(self, *args, **kwargs):
+            tic = time.perf_counter()
+            value = func(self, *args, **kwargs)
+            toc = time.perf_counter()
+            elapsed_time = toc - tic
+            self.Messages.append(f"{func.__name__}: {elapsed_time:0.4f} seconds")
+            return value
+        return wrapper_timer
 
     @property
     def FlatWires(self):
@@ -469,6 +486,7 @@ class ShapeMapper:
             self._sorted_wires = self.sort_wires()
         return self._sorted_wires
 
+    @timer
     def get_pcurves(self):
         "Returns a list of pcurves from the Source shape edges"
         pcurves = []
@@ -478,7 +496,7 @@ class ShapeMapper:
                 if e.Orientation == "Reversed":
                     pcurve.reverse()
                 pcurves.append((pcurve, fp, lp))
-        elif hasattr(self.Transfer, "Surface"):
+        elif hasattr(self.Transfer, "Surface"):  # self.Transfer is a face
             proj = self.Transfer.project([self.Source])
             for e in proj.Edges:
                 pcurve, fp, lp = self.Transfer.curveOnSurface(e)
@@ -487,6 +505,7 @@ class ShapeMapper:
                 pcurves.append((pcurve, fp, lp))
         return pcurves
 
+    @timer
     def get_flat_wires(self):
         "Returns a list of flat wires (on XY plane) from joined pcurves"
         pc = self.get_pcurves()
@@ -506,6 +525,7 @@ class ShapeMapper:
             wires.append(fix.wire())
         return wires
 
+    @timer
     def sort_wires(self):
         """Sort wires in order to build faces
         and returns two lists :
@@ -515,19 +535,10 @@ class ShapeMapper:
         # bs = BoundarySorter(self.FlatWires)
         # bs.sort()
         # return bs.sorted_wires, bs.open_wires
-        closedw = []
-        openw = []
-        closed_wires = []
-        for w in self.FlatWires:
-            if w.isClosed():
-                closedw.append(w)
-            else:
-                openw.append(w)
-        if closedw:
-            closedcomp = Part.Compound(closedw)
-            faces = Part.makeFace(closedcomp)
-            closed_wires = [f.Wires for f in faces.Faces]
-        return closed_wires, openw
+
+        sorter = BoundarySorter(self.FlatWires)
+        sorter.sort()
+        return sorter.sorted_wires, sorter.open_wires
 
     def map_edge_on_surface(self, edge, surface):
         """Maps an edge's first pcurve on a surface.
@@ -537,6 +548,7 @@ class ShapeMapper:
         if pcurve:
             return pcurve[0].toShape(surface, pcurve[3], pcurve[4])
 
+    # @timer
     def map_on_surface(self, wires, surface, fill=False):
         """Maps a list of wires on a surface.
         Returns a compound of wires if fill = False
@@ -567,6 +579,7 @@ class ShapeMapper:
             raise (RuntimeError, "Surface must be at least C1 continuous")
         return face.makeOffsetShape(offset, self.Tolerance).Face1
 
+    @timer
     def get_shapes(self, offset=0.0, fillfaces=True):
         off1 = self.offset_face(self.Target, offset).Face1
         if not fillfaces:
@@ -599,6 +612,7 @@ class ShapeMapper:
         wl = sh1 = self.map_on_surface(open_wires, off1.Surface, False)
         return Part.Compound(faces), wl
 
+    @timer
     def get_extrusion(self, offset1=0.0, offset2=1.0):
         _, wires1 = self.get_shapes(offset1, False)
         _, wires2 = self.get_shapes(offset2, False)
@@ -612,6 +626,7 @@ class ShapeMapper:
             shells.append(Part.Shell(faces))
         return Part.Compound(shells)
 
+    @timer
     def get_solids(self, offset1=0.0, offset2=1.0):
         faces_1, _ = self.get_shapes(offset1, True)
         faces_2, _ = self.get_shapes(offset2, True)

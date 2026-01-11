@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+# SPDX-License-Identifier: LGPL-2.1-or-later
 
 __title__ = ""
 __author__ = "Christophe Grellier (Chris_G)"
@@ -889,7 +889,7 @@ class BlendCurve:
         try:
             from scipy.optimize import minimize
             return True
-        except ImportError:
+        except (ImportError, ValueError):
             return False
 
     @property
